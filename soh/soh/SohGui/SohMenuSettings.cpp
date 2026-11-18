@@ -245,6 +245,13 @@ void SohMenu::AddMenuSettings() {
         .Callback([](WidgetInfo& info) {
             Audio_SetGameVolume(SEQ_PLAYER_SFX, ((float)CVarGetInteger(CVAR_SETTING("Volume.SFX"), 100) / 100.0f));
         });
+    AddWidget(path, "Menu Sounds", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_SETTING("Menu.Sounds"))
+        .RaceDisable(false)
+        .Options(CheckboxOptions()
+                     .DefaultValue(true)
+                     .Tooltip("Plays the pause screen sound effects in this menu and softens the music while it "
+                              "is open, as the pause screen does. They follow Sound Effects Volume."));
     AddWidget(path, "Audio API (Needs reload)", WIDGET_AUDIO_BACKEND).RaceDisable(false);
 
     // Graphics Settings

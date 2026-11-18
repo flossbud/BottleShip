@@ -192,14 +192,24 @@ void SohMenu::SetCurrentSection(const std::string& page, const std::string& sect
 void SohMenu::PlaySound(Pm::Sound sound) {
     // The game's own pause screen: func_800F64E0 plays the open / close sound and puts the audio into or
     // out of its pause state, which softens the music. Leave that state alone if the game is already in it.
+    bool enabled = CVarGetInteger(CVAR_SETTING("Menu.Sounds"), 1);
+    if (sound == Pm::Sound::Close && mAudioPaused) {
+        mAudioPaused = false;
+        if (enabled) {
+            func_800F64E0(0);
+        } else {
+            // Menu Sounds was turned off while the menu was open: leave the pause state without the sound.
+            D_80130608 = 0;
+            Audio_QueueCmdS32(0xF2000000, 0);
+        }
+        return;
+    }
+    if (!enabled) {
+        return;
+    }
     if (sound == Pm::Sound::Open && D_80130608 == 0) {
         func_800F64E0(1);
         mAudioPaused = true;
-        return;
-    }
-    if (sound == Pm::Sound::Close && mAudioPaused) {
-        func_800F64E0(0);
-        mAudioPaused = false;
         return;
     }
     u16 sfx = NA_SE_SY_CURSOR;
