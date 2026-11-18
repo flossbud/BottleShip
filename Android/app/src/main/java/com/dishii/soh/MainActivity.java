@@ -55,6 +55,7 @@ public class MainActivity extends SDLActivity{
         // Check if storage permissions are granted
         if (hasStoragePermission()) {
             doVersionCheck();
+            refreshSohOtrIfApkChanged();
             checkAndSetupFiles();
         } else {
             requestStoragePermission();
@@ -275,24 +276,69 @@ public class MainActivity extends SDLActivity{
         }
 
         // Copy soh.otr from internal assets
-        File targetOtrFile = new File(targetRootFolder, "soh.otr");
-        try (InputStream in = getAssets().open("soh.otr");
-             OutputStream out = new FileOutputStream(targetOtrFile)) {
-
-            byte[] buffer = new byte[1024];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
-            }
-
+        if (copySohOtr(new File(targetRootFolder, "soh.otr"))) {
             runOnUiThread(() -> Toast.makeText(this, "soh.otr copied", Toast.LENGTH_SHORT).show());
-
-        } catch (IOException e) {
-            e.printStackTrace();
+        } else {
             runOnUiThread(() -> Toast.makeText(this, "Error copying soh.otr", Toast.LENGTH_LONG).show());
         }
 
         setupLatch.countDown();
+    }
+
+    // Copies the soh.otr packed in the APK to `target` and remembers which install it came from.
+    private boolean copySohOtr(File target) {
+        File temp = new File(target.getParentFile(), "soh.otr.tmp");
+        try (InputStream in = getAssets().open("soh.otr");
+             OutputStream out = new FileOutputStream(temp)) {
+            byte[] buffer = new byte[65536];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            temp.delete();
+            return false;
+        }
+        // Written beside the real file and renamed, so a copy cut short never leaves a broken soh.otr.
+        if (target.exists() && !target.delete()) {
+            temp.delete();
+            return false;
+        }
+        if (!temp.renameTo(target)) {
+            temp.delete();
+            return false;
+        }
+        preferences.edit().putLong("sohOtrApkTime", apkUpdateTime()).apply();
+        return true;
+    }
+
+    private long apkUpdateTime() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).lastUpdateTime;
+        } catch (PackageManager.NameNotFoundException e) {
+            return 0;
+        }
+    }
+
+    // soh.otr holds the port's own assets (menu fonts, textures) and has to match the build that reads it.
+    // Setup only copies it when it is missing, so an updated APK would keep running with the old one.
+    // Copy it again whenever the APK was installed or updated since the last copy. oot.otr and saves are
+    // not touched.
+    private void refreshSohOtrIfApkChanged() {
+        File sohFile = new File(new File(Environment.getExternalStorageDirectory(), "SOH"), "soh.otr");
+        if (!sohFile.exists()) {
+            return; // first-run setup copies it
+        }
+        long apkTime = apkUpdateTime();
+        if (apkTime == 0 || preferences.getLong("sohOtrApkTime", 0) == apkTime) {
+            return;
+        }
+        if (copySohOtr(sohFile)) {
+            Log.i("setupFiles", "soh.otr refreshed for this build");
+        } else {
+            Log.e("setupFiles", "Could not refresh soh.otr");
+        }
     }
 
 
