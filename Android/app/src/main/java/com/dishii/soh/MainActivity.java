@@ -36,6 +36,8 @@ import android.widget.ImageView;
 
 import java.util.concurrent.Executors;
 import android.app.AlertDialog;
+import android.hardware.input.InputManager;
+import android.view.InputDevice;
 
 //This class is the main SDLActivity and just sets up a bunch of default files
 public class MainActivity extends SDLActivity{
@@ -62,6 +64,14 @@ public class MainActivity extends SDLActivity{
 
         setupControllerOverlay();
         attachController();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (inputManager != null) {
+            inputManager.unregisterInputDeviceListener(gamepadListener);
+        }
+        super.onDestroy();
     }
 
     public static void waitForSetupFromNative() {
@@ -440,27 +450,105 @@ public class MainActivity extends SDLActivity{
 
     }
 
+    // Touch controls visibility, set in the game menu (Settings > Controls > Touch Controls).
+    // Mode values must match AndroidTouchControls::Mode in soh/soh/Platform/AndroidTouchControls.h.
+    static final int TOUCH_CONTROLS_AUTO = 0;   // shown only while no physical gamepad is connected
+    static final int TOUCH_CONTROLS_ALWAYS = 1;
+    static final int TOUCH_CONTROLS_NEVER = 2;
+    private static final String PREF_HIDDEN_BY_USER = "touchControlsHiddenByUser";
+
+    private int touchControlsMode = TOUCH_CONTROLS_AUTO;
+    private boolean showToggleButton = false;
+    private ViewGroup touchControlsGroup;
+    // Always mode: the eye button's choice, saved across launches.
+    private boolean hiddenByUser;
+    // Auto mode: the eye button overrides the automatic choice until a gamepad connects or disconnects.
+    private Boolean autoOverrideVisible = null;
+    private InputManager inputManager;
+
+    private final InputManager.InputDeviceListener gamepadListener = new InputManager.InputDeviceListener() {
+        @Override public void onInputDeviceAdded(int deviceId) { onGamepadsChanged(); }
+        @Override public void onInputDeviceRemoved(int deviceId) { onGamepadsChanged(); }
+        @Override public void onInputDeviceChanged(int deviceId) { onGamepadsChanged(); }
+    };
+
+    private void onGamepadsChanged() {
+        autoOverrideVisible = null;
+        updateTouchControlsVisibility();
+    }
+
     private void setupToggleButton(Button button, ViewGroup uiGroup){
-        boolean isHidden = preferences.getBoolean("controlsVisible", false); // Default to 'false' (visible)
-        uiGroup.setVisibility(isHidden ? View.INVISIBLE : View.VISIBLE); // Set the initial visibility based on the saved state
-        //if(isHidden){
-        //    detachController();
-        //}
-        button.setOnClickListener(new View.OnClickListener() {
-            boolean isHidden = false;
-            @Override
-            public void onClick(View v) {
-                if (isHidden) {
-                    uiGroup.setVisibility(View.VISIBLE); // Show UI elements
-                    //attachController();
-                } else {
-                    uiGroup.setVisibility(View.INVISIBLE); // Hide UI elements
-                    //detachController();
-                }
-                preferences.edit().putBoolean("controlsVisible", !isHidden).apply();
-                isHidden = !isHidden; // Toggle state
+        touchControlsGroup = uiGroup;
+        // "controlsVisible" was upstream's key and actually meant "hidden"; carry it over once.
+        hiddenByUser = preferences.getBoolean(PREF_HIDDEN_BY_USER, preferences.getBoolean("controlsVisible", false));
+
+        inputManager = (InputManager) getSystemService(Context.INPUT_SERVICE);
+        if (inputManager != null) {
+            inputManager.registerInputDeviceListener(gamepadListener, null);
+        }
+
+        button.setOnClickListener(v -> {
+            boolean visible = touchControlsGroup.getVisibility() == View.VISIBLE;
+            if (touchControlsMode == TOUCH_CONTROLS_ALWAYS) {
+                hiddenByUser = visible;
+                preferences.edit().putBoolean(PREF_HIDDEN_BY_USER, hiddenByUser).apply();
+            } else {
+                autoOverrideVisible = !visible;
             }
+            updateTouchControlsVisibility();
         });
+
+        updateTouchControlsVisibility();
+    }
+
+    // Called from native code (AndroidTouchControls::Apply) at startup and when the menu settings change.
+    public void setTouchControlsConfig(int mode, boolean showToggle) {
+        runOnUiThread(() -> {
+            if (mode != touchControlsMode) {
+                autoOverrideVisible = null;
+            }
+            touchControlsMode = mode;
+            showToggleButton = showToggle;
+            updateTouchControlsVisibility();
+        });
+    }
+
+    private void updateTouchControlsVisibility() {
+        if (touchControlsGroup == null) {
+            return;
+        }
+        boolean visible;
+        switch (touchControlsMode) {
+            case TOUCH_CONTROLS_ALWAYS:
+                visible = !hiddenByUser;
+                break;
+            case TOUCH_CONTROLS_NEVER:
+                visible = false;
+                break;
+            default:
+                visible = autoOverrideVisible != null ? autoOverrideVisible : !isPhysicalGamepadConnected();
+                break;
+        }
+        touchControlsGroup.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+        boolean toggleVisible = showToggleButton && touchControlsMode != TOUCH_CONTROLS_NEVER;
+        buttonToggle.setVisibility(toggleVisible ? View.VISIBLE : View.GONE);
+    }
+
+    private boolean isPhysicalGamepadConnected() {
+        for (int id : InputDevice.getDeviceIds()) {
+            InputDevice device = InputDevice.getDevice(id);
+            if (device == null || device.isVirtual()) {
+                continue;
+            }
+            int sources = device.getSources();
+            boolean isGamepad = (sources & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+                    || (sources & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
+            // Some phones report fingerprint sensors as gamepads (see Ship::Mobile::IsInvalidGamepad).
+            if (isGamepad && !device.getName().startsWith("uinput-")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Function to set a touch listener for each button
