@@ -4,6 +4,10 @@ A port of Ship of Harkinian to Android.
 
 Original Repository: [HarbourMasters/Shipwright](https://github.com/HarbourMasters/Shipwright)
 
+BottleShip is a fork of [Waterdish/Shipwright-Android](https://github.com/Waterdish/Shipwright-Android).
+
+**No ROM or game assets are included.** You need your own legally obtained copy of the game. This project is not affiliated with or endorsed by Nintendo.
+
 Supported (probably): Android 7.0+ (OpenGL ES 3.0+ required)
 
 Tested On: Android 15
@@ -111,3 +115,7 @@ A: Have your controller plugged in before opening the app. Don't disconnect it m
     - CMake 3.31.5
 
 6. Sync and Build the Project.
+
+## License
+
+BottleShip's own changes are MIT-licensed ([LICENSE](LICENSE)). The Ship of Harkinian code it is built on has no license, and the submodules are MIT. See [NOTICE.md](NOTICE.md) for the details.
