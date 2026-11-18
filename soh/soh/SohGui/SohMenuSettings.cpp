@@ -4,6 +4,7 @@
 #include "soh/ResourceManagerHelpers.h"
 #include "UIWidgets.hpp"
 #include <spdlog/fmt/fmt.h>
+#include "soh/Platform/AndroidTouchControls.h"
 
 extern "C" {
 #include "include/z64audio.h"
@@ -14,6 +15,14 @@ namespace SohGui {
 
 extern std::shared_ptr<SohMenu> mSohMenu;
 using namespace UIWidgets;
+
+#ifdef __ANDROID__
+static std::unordered_map<int32_t, const char*> touchControlsModeOptions = {
+    { AndroidTouchControls::TOUCH_CONTROLS_AUTO, "Auto" },
+    { AndroidTouchControls::TOUCH_CONTROLS_ALWAYS, "Always" },
+    { AndroidTouchControls::TOUCH_CONTROLS_NEVER, "Never" },
+};
+#endif
 
 static std::unordered_map<int32_t, const char*> imguiScaleOptions = {
     { 0, "Small" },
@@ -379,6 +388,32 @@ void SohMenu::AddMenuSettings() {
         .RaceDisable(false)
         .WindowName("Configure Controller")
         .Options(WindowButtonOptions().Tooltip("Enables the separate Bindings Window."));
+#ifdef __ANDROID__
+    AddWidget(path, "Touch Controls", WIDGET_SEPARATOR_TEXT);
+    AddWidget(path, "Show Touch Controls", WIDGET_CVAR_COMBOBOX)
+        .CVar(CVAR_TOUCH_CONTROLS_MODE)
+        .RaceDisable(false)
+        .Callback([](WidgetInfo& info) { AndroidTouchControls::Apply(); })
+        .Options(ComboboxOptions()
+                     .Tooltip("When the on-screen controls are shown.\n"
+                              "Auto: only while no gamepad is connected.\n"
+                              "Always: always shown.\n"
+                              "Never: never shown.")
+                     .ComboMap(touchControlsModeOptions)
+                     .DefaultIndex(AndroidTouchControls::TOUCH_CONTROLS_AUTO));
+    AddWidget(path, "Show Eye Button", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_TOUCH_CONTROLS_SHOW_TOGGLE)
+        .RaceDisable(false)
+        .PreFunc([](WidgetInfo& info) {
+            info.isHidden = CVarGetInteger(CVAR_TOUCH_CONTROLS_MODE, AndroidTouchControls::TOUCH_CONTROLS_AUTO) ==
+                            AndroidTouchControls::TOUCH_CONTROLS_NEVER;
+        })
+        .Callback([](WidgetInfo& info) { AndroidTouchControls::Apply(); })
+        .Options(CheckboxOptions().Tooltip(
+            "Shows the eye button in the corner of the screen, which hides or shows the touch controls."));
+    // Send the saved settings to the Android side once at startup.
+    AndroidTouchControls::Apply();
+#endif
 
     // Input Viewer
     path.sidebarName = "Input Viewer";
