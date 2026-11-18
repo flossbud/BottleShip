@@ -90,13 +90,15 @@ void SohMenu::InitElement() {
 #endif
     AddMenuDevTools();
 
-    if (CVarGetInteger(CVAR_SETTING("Menu.SidebarSearch"), 0)) {
-        InsertSidebarSearch();
-    }
-
     for (auto& initFunc : MenuInit::GetInitFuncs()) {
         initFunc();
     }
+
+    // The menu is always driven by the controller and never pops out; the options for both are gone.
+    CVarSetInteger(CVAR_IMGUI_CONTROLLER_NAV, 1);
+    CVarClear(CVAR_SETTING("Menu.Popout"));
+    HidePopoutWindows();
+    mPauseMenu = std::make_unique<Pm::PauseMenu>(this);
 
     disabledMap = {
         { DISABLE_FOR_NO_VSYNC,
@@ -158,8 +160,27 @@ void SohMenu::InitElement() {
     };
 }
 
+// Any id that no other input blocker uses.
+#define MENU_CLOSE_GAME_INPUT_BLOCK_ID 95237930
+
 void SohMenu::UpdateElement() {
     Ship::Menu::UpdateElement();
+    if (mPauseMenu) {
+        mPauseMenu->Update(IsVisible());
+    }
+    auto controlDeck = Ship::Context::GetInstance()->GetControlDeck();
+    if (IsVisible()) {
+        // The ImGui backend only reads the gamepad while this flag is set.
+        ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+        mWasVisible = true;
+    } else if (mWasVisible) {
+        // The button that closed the menu is still held: keep it from reaching the game (B swings the sword).
+        mWasVisible = false;
+        mInputBlockFrames = std::max(6, (int)(ImGui::GetIO().Framerate * 0.25f));
+        controlDeck->BlockGameInput(MENU_CLOSE_GAME_INPUT_BLOCK_ID);
+    } else if (mInputBlockFrames > 0 && --mInputBlockFrames == 0) {
+        controlDeck->UnblockGameInput(MENU_CLOSE_GAME_INPUT_BLOCK_ID);
+    }
 }
 
 void SohMenu::Draw() {
@@ -167,6 +188,15 @@ void SohMenu::Draw() {
 }
 
 void SohMenu::DrawElement() {
-    Ship::Menu::DrawElement();
+    for (auto& [reason, info] : disabledMap) {
+        info.active = info.evaluation(info);
+    }
+    if (mPauseMenu) {
+        mPauseMenu->Draw();
+    }
+}
+
+bool SohMenu::PausesGame() {
+    return IsVisible() && mPauseMenu && mPauseMenu->IsOpen();
 }
 } // namespace SohGui

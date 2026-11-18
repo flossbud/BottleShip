@@ -13,9 +13,6 @@ void SohMenu::AddMenuDevTools() {
     AddSidebarEntry("Dev Tools", "General", 3);
     WidgetPath path = { "Dev Tools", "General", SECTION_COLUMN_1 };
 
-    AddWidget(path, "Popout Menu", WIDGET_CVAR_CHECKBOX)
-        .CVar("gSettings.Menu.Popout")
-        .Options(CheckboxOptions().Tooltip("Changes the menu display from overlay to windowed."));
     AddWidget(path, "Debug Mode", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_DEVELOPER_TOOLS("DebugEnabled"))
         .Options(
@@ -81,11 +78,7 @@ void SohMenu::AddMenuDevTools() {
             info.isHidden = mSohMenu->disabledMap.at(DISABLE_FOR_FRAME_ADVANCE_OFF).active ||
                             mSohMenu->disabledMap.at(DISABLE_FOR_DEBUG_MODE_OFF).active;
         })
-        .PostFunc([](WidgetInfo& info) {
-            if (ImGui::IsItemActive()) {
-                CVarSetInteger(CVAR_DEVELOPER_TOOLS("FrameAdvanceTick"), 1);
-            }
-        })
+        .HeldFunc([](WidgetInfo& info) { CVarSetInteger(CVAR_DEVELOPER_TOOLS("FrameAdvanceTick"), 1); })
         .SameLine(true);
 
     // Stats

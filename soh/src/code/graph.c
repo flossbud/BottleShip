@@ -432,6 +432,11 @@ extern AudioMgr gAudioMgr;
 
 extern void ProcessSaveStateRequests(void);
 
+// BottleShip: the settings menu pauses the game (soh/SohGui/SohGui.cpp).
+extern int SohGui_IsGamePausedByMenu(void);
+// Set once the current game state has built a display list, so there is a frame to hold while paused.
+static bool sHasFrameToHold = false;
+
 static void RunFrame() {
     u32 size;
     char faultMsg[0x50];
@@ -465,6 +470,7 @@ static void RunFrame() {
             Fault_AddHungupAndCrashImpl("GAME CLASS MALLOC FAILED", faultMsg);
         }
         GameState_Init(gGameState, runFrameContext.ovl->init, &runFrameContext.gfxCtx);
+        sHasFrameToHold = false;
 
         // Setup the normal skybox once before entering any game states to avoid the 0xabababab crash.
         // The crash is due to certain skyboxes not loading all the data they need from Skybox_Setup.
@@ -484,7 +490,12 @@ static void RunFrame() {
 
             PadMgr_ThreadEntry(&gPadMgr);
 
-            Graph_Update(&runFrameContext.gfxCtx, gGameState);
+            // While the menu is open the game does not advance: skip the update and draw the display list
+            // of the last frame again below (the gfx debugger holds a frame the same way).
+            if (!(sHasFrameToHold && SohGui_IsGamePausedByMenu())) {
+                Graph_Update(&runFrameContext.gfxCtx, gGameState);
+                sHasFrameToHold = true;
+            }
             // ticksB = GetPerfCounter();
 
             if (GfxDebuggerIsDebuggingRequested()) {

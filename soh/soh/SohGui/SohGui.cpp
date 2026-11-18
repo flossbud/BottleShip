@@ -100,7 +100,7 @@ std::shared_ptr<Notification::Window> mNotificationWindow;
 std::shared_ptr<TimeDisplayWindow> mTimeDisplayWindow;
 
 UIWidgets::Colors GetMenuThemeColor() {
-    return mSohMenu->GetMenuThemeColor();
+    return mSohMenu != nullptr ? mSohMenu->GetMenuThemeColor() : UIWidgets::Colors::LightBlue;
 }
 
 void SetupGuiElements() {
@@ -249,3 +249,7 @@ void ShowRandomizerSettingsMenu() {
     mRandomizerSettingsWindow->Show();
 }
 } // namespace SohGui
+
+extern "C" int SohGui_IsGamePausedByMenu(void) {
+    return SohGui::mSohMenu != nullptr && SohGui::mSohMenu->PausesGame();
+}

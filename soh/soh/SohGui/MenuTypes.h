@@ -50,6 +50,7 @@ typedef enum {
     WIDGET_AUDIO_BACKEND, // needed for special operations that can't be handled easily with the normal combobox widget
     WIDGET_VIDEO_BACKEND, // same as above
     WIDGET_CUSTOM,
+    WIDGET_CVAR_HOST_PORT, // host text field (cVar) and port number field (cVar2) on one row
 } WidgetType;
 
 typedef enum {
@@ -105,6 +106,12 @@ struct WidgetInfo {
     WidgetFunc preFunc = nullptr;
     WidgetFunc postFunc = nullptr;
     WidgetFunc customFunction = nullptr;
+    // Buttons only: called every frame the button is held down.
+    WidgetFunc heldFunc = nullptr;
+    // WIDGET_CVAR_HOST_PORT only: the port cvar and the two defaults.
+    const char* cVar2 = nullptr;
+    const char* defaultHost = "";
+    int32_t defaultPort = 0;
     DisableVec activeDisables = {};
     const char* windowName = "";
     bool isHidden = false;
@@ -174,6 +181,17 @@ struct WidgetInfo {
     }
     WidgetInfo& PostFunc(WidgetFunc postFunc_) {
         postFunc = postFunc_;
+        return *this;
+    }
+    WidgetInfo& HeldFunc(WidgetFunc heldFunc_) {
+        heldFunc = heldFunc_;
+        return *this;
+    }
+    WidgetInfo& HostPort(const char* hostCVar, const char* defaultHost_, const char* portCVar, int32_t defaultPort_) {
+        cVar = hostCVar;
+        cVar2 = portCVar;
+        defaultHost = defaultHost_;
+        defaultPort = defaultPort_;
         return *this;
     }
     WidgetInfo& WindowName(const char* windowName_) {
