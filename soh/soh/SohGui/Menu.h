@@ -7,6 +7,9 @@
 
 namespace Ship {
 uint32_t GetVectorIndexOf(std::vector<std::string>& vector, std::string value);
+
+// Holds the menu's data: pages ("menu entries"), their sidebar sections and the widgets in them.
+// Drawing is done by the pause-style menu (SohGui/PauseMenu), which SohMenu feeds from this data.
 class Menu : public GuiWindow {
   public:
     using GuiWindow::GuiWindow;
@@ -18,13 +21,10 @@ class Menu : public GuiWindow {
     void DrawElement() override;
     void UpdateElement() override;
     void Draw() override;
-    void InsertSidebarSearch();
-    void RemoveSidebarSearch();
     void UpdateWindowBackendObjects();
-    bool IsMenuPopped();
+    // Colour used by the windows that are still drawn with UIWidgets (the former pop-outs).
     UIWidgets::Colors GetMenuThemeColor();
 
-    void MenuDrawItem(WidgetInfo& widget, uint32_t width, UIWidgets::Colors menuThemeIndex);
     void AddMenuEntry(std::string entryName, const char* entryCvar);
     std::unordered_map<uint32_t, disabledInfo>& GetDisabledMap();
 
@@ -34,9 +34,6 @@ class Menu : public GuiWindow {
     uint32_t mWindowFlags;
     std::unordered_map<std::string, MainMenuEntry> menuEntries;
     std::vector<std::string> menuOrder;
-    uint32_t DrawSearchResults(std::string& menuSearchText);
-    ImGuiTextFilter menuSearch;
-    uint8_t searchSidebarIndex;
     UIWidgets::Colors defaultThemeIndex;
     std::shared_ptr<std::vector<Ship::WindowBackend>> availableWindowBackends;
     std::unordered_map<Ship::WindowBackend, const char*> availableWindowBackendsMap;
@@ -44,22 +41,6 @@ class Menu : public GuiWindow {
 
     std::unordered_map<uint32_t, disabledInfo> disabledMap;
     std::vector<disabledInfo> disabledVector;
-    const SidebarEntry searchSidebarEntry = {
-        .columnCount = 1,
-        .columnWidgets = { { { .name = "Sidebar Search",
-                               .type = WIDGET_SEARCH,
-                               .options = std::make_shared<UIWidgets::WidgetOptions>(UIWidgets::WidgetOptions{}.Tooltip(
-                                   "Searches all menus for the given text, including tooltips.")) } } }
-    };
-
-  private:
-    bool allowPopout = true; // PortNote: should be set to false on small screen ports
-    bool popped;
-    ImVec2 poppedSize;
-    ImVec2 poppedPos;
-    float windowHeight;
-    float windowWidth;
-    UIWidgets::Colors menuThemeIndex;
 };
 } // namespace Ship
 

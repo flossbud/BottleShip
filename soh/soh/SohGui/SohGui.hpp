@@ -44,4 +44,7 @@ UIWidgets::Colors GetMenuThemeColor();
 
 #define THEME_COLOR SohGui::GetMenuThemeColor()
 
+// True while the pause-style menu is open. The game loop holds the current frame instead of updating.
+extern "C" int SohGui_IsGamePausedByMenu(void);
+
 #endif /* SohGui_hpp */

@@ -101,28 +101,9 @@ void SohMenu::AddMenuSettings() {
     WidgetPath path = { "Settings", "General", SECTION_COLUMN_1 };
 
     // General - Settings
-    AddWidget(path, "Menu Settings", WIDGET_SEPARATOR_TEXT);
-    AddWidget(path, "Menu Theme", WIDGET_CVAR_COMBOBOX)
-        .CVar(CVAR_SETTING("Menu.Theme"))
-        .RaceDisable(false)
-        .Options(ComboboxOptions()
-                     .Tooltip("Changes the Theme of the Menu Widgets.")
-                     .ComboMap(menuThemeOptions)
-                     .DefaultIndex(Colors::LightBlue));
+    // The pause-style menu has one fixed look and is always driven by the controller, so Menu Theme, Menu
+    // Background Opacity and Menu Controller Navigation are gone (see SohMenu::InitElement).
 #if not defined(__SWITCH__) and not defined(__WIIU__)
-    AddWidget(path, "Menu Controller Navigation", WIDGET_CVAR_CHECKBOX)
-        .CVar(CVAR_IMGUI_CONTROLLER_NAV)
-        .RaceDisable(false)
-        .Options(CheckboxOptions().Tooltip(
-            "Allows controller navigation of the port menu (Settings, Enhancements,...)\nCAUTION: "
-            "This will disable game inputs while the menu is visible.\n\nD-pad to move between "
-            "items, A to select, B to move up in scope."));
-    AddWidget(path, "Menu Background Opacity", WIDGET_CVAR_SLIDER_FLOAT)
-        .CVar(CVAR_SETTING("Menu.BackgroundOpacity"))
-        .RaceDisable(false)
-        .Options(FloatSliderOptions().DefaultValue(0.85f).IsPercentage().Tooltip(
-            "Sets the opacity of the background of the port menu."));
-
     AddWidget(path, "General Settings", WIDGET_SEPARATOR_TEXT);
     AddWidget(path, "Cursor Always Visible", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_SETTING("CursorVisibility"))
@@ -136,13 +117,6 @@ void SohMenu::AddMenuSettings() {
     AddWidget(path, "Search In Sidebar", WIDGET_CVAR_CHECKBOX)
         .CVar(CVAR_SETTING("Menu.SidebarSearch"))
         .RaceDisable(false)
-        .Callback([](WidgetInfo& info) {
-            if (CVarGetInteger(CVAR_SETTING("Menu.SidebarSearch"), 0)) {
-                mSohMenu->InsertSidebarSearch();
-            } else {
-                mSohMenu->RemoveSidebarSearch();
-            }
-        })
         .Options(CheckboxOptions().Tooltip(
             "Displays the Search menu as a sidebar entry in Settings instead of in the header."));
     AddWidget(path, "Search Input Autofocus", WIDGET_CVAR_CHECKBOX)
@@ -271,6 +245,13 @@ void SohMenu::AddMenuSettings() {
         .Callback([](WidgetInfo& info) {
             Audio_SetGameVolume(SEQ_PLAYER_SFX, ((float)CVarGetInteger(CVAR_SETTING("Volume.SFX"), 100) / 100.0f));
         });
+    AddWidget(path, "Menu Sounds", WIDGET_CVAR_CHECKBOX)
+        .CVar(CVAR_SETTING("Menu.Sounds"))
+        .RaceDisable(false)
+        .Options(CheckboxOptions()
+                     .DefaultValue(true)
+                     .Tooltip("Plays the pause screen sound effects in this menu and softens the music while it "
+                              "is open, as the pause screen does. They follow Sound Effects Volume."));
     AddWidget(path, "Audio API (Needs reload)", WIDGET_AUDIO_BACKEND).RaceDisable(false);
 
     // Graphics Settings
@@ -281,10 +262,6 @@ void SohMenu::AddMenuSettings() {
     path.sidebarName = "Graphics";
     AddSidebarEntry("Settings", "Graphics", 3);
     AddWidget(path, "Graphics Options", WIDGET_SEPARATOR_TEXT);
-    AddWidget(path, "Toggle Fullscreen", WIDGET_BUTTON)
-        .RaceDisable(false)
-        .Callback([](WidgetInfo& info) { Ship::Context::GetInstance()->GetWindow()->ToggleFullscreen(); })
-        .Options(ButtonOptions().Tooltip("Toggles Fullscreen On/Off."));
     AddWidget(path, "Internal Resolution", WIDGET_CVAR_SLIDER_FLOAT)
         .CVar(CVAR_INTERNAL_RESOLUTION)
         .RaceDisable(false)

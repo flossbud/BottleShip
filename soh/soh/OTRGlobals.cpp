@@ -70,6 +70,7 @@
 #include <functions.h>
 #include "Enhancements/item-tables/ItemTableManager.h"
 #include "soh/SohGui/SohGui.hpp"
+#include "soh/SohGui/PauseMenu/PmDraw.h"
 #include "soh/SohGui/ImGuiUtils.h"
 #include "ActorDB.h"
 #include "SaveManager.h"
@@ -433,6 +434,7 @@ OTRGlobals::OTRGlobals() {
     fontStandardLarger = CreateFontWithSize(20.0f, "fonts/Montserrat-Regular.ttf");
     fontStandardLargest = CreateFontWithSize(24.0f, "fonts/Montserrat-Regular.ttf");
     ImGui::GetIO().FontDefault = fontStandardLarger;
+    Pm::LoadFonts();
     ScaleImGui();
 
     // Move the camera strings from read only memory onto the heap (writable memory)
@@ -1459,9 +1461,7 @@ void RunCommands(Gfx* Commands, const std::vector<std::unordered_map<Mtx*, MtxF>
     // Process window events for resize, mouse, keyboard events
     wnd->HandleEvents();
 
-    UIWidgets::Colors themeColor =
-        static_cast<UIWidgets::Colors>(CVarGetInteger(CVAR_SETTING("Menu.Theme"), UIWidgets::Colors::LightBlue));
-    ImGui::PushStyleColor(ImGuiCol_TitleBgActive, UIWidgets::ColorValues.at(themeColor));
+    ImGui::PushStyleColor(ImGuiCol_TitleBgActive, UIWidgets::ColorValues.at(SohGui::GetMenuThemeColor()));
     for (const auto& m : mtx_replacements) {
         wnd->DrawAndRunGraphicsCommands(Commands, m);
     }
@@ -1515,6 +1515,14 @@ extern "C" void Graph_ProcessGfxCommands(Gfx* commands) {
     if (GfxDebuggerIsDebugging()) {
         mtx_replacements.clear();
         mtx_replacements.emplace_back();
+    }
+
+    // While the menu has the game paused the same display list is drawn again every frame. Keep the
+    // frame count (the menu animates at the full frame rate) but do not interpolate: the picture stays still.
+    if (SohGui_IsGamePausedByMenu()) {
+        for (auto& replacements : mtx_replacements) {
+            replacements.clear();
+        }
     }
 
     RunCommands(commands, mtx_replacements);
