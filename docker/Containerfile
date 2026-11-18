@@ -79,6 +79,8 @@ RUN sdkmanager --update && \
     "platforms;android-${ANDROID_SDK_VERSION}" \
     "build-tools;${ANDROID_BUILD_TOOLS_VERSION}" \
     "ndk;${ANDROID_NDK_VERSION}"
+# AGP 8.10 requires build-tools 35; install it here so the build can run as a non-root user
+RUN sdkmanager "build-tools;35.0.0"
 ENV ANDROID_NDK_HOME=${ANDROID_INSTALL_PATH}/ndk/${ANDROID_NDK_VERSION}
 ENV PATH=${ANDROID_INSTALL_PATH}/cmdline-tools/latest/bin:${ANDROID_INSTALL_PATH}/platform-tools:${ANDROID_INSTALL_PATH}/build-tools/${ANDROID_BUILD_TOOLS_VERSION}:$PATH
 

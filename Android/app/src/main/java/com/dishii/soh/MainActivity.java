@@ -74,7 +74,8 @@ public class MainActivity extends SDLActivity{
 
     private void doVersionCheck(){
         int currentVersion = BuildConfig.VERSION_CODE;
-        int storedVersion = preferences.getInt("appVersion", 1);
+        // A fresh install has no stored version; treating that as 1 deleted soh.otr/oot.otr on the second launch.
+        int storedVersion = preferences.getInt("appVersion", currentVersion);
 
         if (currentVersion > storedVersion) {
             deleteOutdatedAssets();
