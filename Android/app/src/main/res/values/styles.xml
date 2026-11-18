@@ -5,4 +5,15 @@
         <!-- Customize your theme here. -->
     </style>
 
+    <!-- The stock Theme.NoTitleBar.Fullscreen has no FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS, so Android paints a
+         black legacy navigation-bar background over the game surface and leaves it there in immersive mode. -->
+    <style name="SohImmersive" parent="@android:style/Theme.NoTitleBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+    </style>
+
 </resources>
