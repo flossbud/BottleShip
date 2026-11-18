@@ -37,6 +37,9 @@ enum class RowKind {
     ImGui,   // legacy widget drawn by its own ImGui code
 };
 
+// The menu's sounds, played with the game's own pause-menu sound effects.
+enum class Sound { Open, Close, Cursor, Decide, Cancel, Error, PageLeft, PageRight };
+
 struct Option {
     int32_t value = 0;
     std::string label;
@@ -132,6 +135,7 @@ class RowUi {
     virtual bool Disabled() = 0;
     // Replaces the footer plate text while something is waiting for input.
     virtual void SetPlate(const std::string& title, const std::string& text) = 0;
+    virtual void PlaySound(Sound sound) = 0;
     // Call every frame while the row waits for a raw input (a binding being recorded): the menu ignores
     // its own keys until the row stops asking.
     virtual void CaptureInput() = 0;

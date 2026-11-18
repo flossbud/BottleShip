@@ -19,6 +19,8 @@ constexpr float kHeaderH = 54.0f;
 constexpr float kFooterMinH = 60.0f;
 constexpr float kSidebarW = 198.0f;
 constexpr float kTurnSeconds = 0.52f;
+constexpr float kOpenSeconds = 0.30f;
+constexpr float kCloseSeconds = 0.20f;
 constexpr float kDescExpandChars = 200;
 const char* kMainWindow = "Main Menu";
 const char* kModalWindow = "Main Menu Modal";
@@ -89,15 +91,43 @@ bool PauseMenu::IsOpen() const {
 
 void PauseMenu::Update(bool visible) {
     Impl& m = *mImpl;
-    if (!visible && m.open) {
-        m.open = false;
+    if (!visible && m.open && !m.closing) {
+        // The menu was asked to close: it keeps being drawn while it animates away (see Draw).
+        m.closing = true;
         m.picker = Impl::Picker();
         m.dialog = Impl::Dialog();
         m.turn = Impl::Turn();
         m.ClearTransient();
         m.inputCaptured = false;
         m.captureRequested = false;
+        m.src->PlaySound(Sound::Close);
+    } else if (visible && m.closing) {
+        // Reopened before it was gone: come back from where the animation is.
+        m.closing = false;
+        m.src->PlaySound(Sound::Open);
     }
+}
+
+// How far open the menu looks, 0..1: quick at first and settling when opening, the reverse when closing.
+float PauseMenu::Impl::OpenEase() const {
+    float p = std::clamp(openness, 0.0f, 1.0f);
+    if (closing) {
+        return p * p * (3.0f - 2.0f * p);
+    }
+    float q = 1.0f - p;
+    return 1.0f - q * q * q;
+}
+
+void PauseMenu::Impl::Play(Sound sound) {
+    // Holding a direction or dragging a slider asks for the cursor sound every frame.
+    if (sound == Sound::Cursor) {
+        double t = ImGui::GetTime();
+        if (t - lastCursorSound < 0.06) {
+            return;
+        }
+        lastCursorSound = t;
+    }
+    src->PlaySound(sound);
 }
 
 void PauseMenu::Impl::ClearTransient() {
@@ -118,10 +148,27 @@ void PauseMenu::Draw() {
         return;
     }
     ImGuiViewport* vp = ImGui::GetMainViewport();
+    if (m.open) {
+        float dt = ImGui::GetIO().DeltaTime;
+        if (m.closing) {
+            m.openness -= dt / kCloseSeconds;
+            if (m.openness <= 0.0f) {
+                m.openness = 0.0f;
+                m.open = false;
+                m.closing = false;
+                return;
+            }
+        } else {
+            m.openness = std::min(1.0f, m.openness + dt / kOpenSeconds);
+        }
+    }
     ImGui::SetNextWindowPos(vp->Pos);
     ImGui::SetNextWindowSize(vp->Size);
     if (!m.open) {
         m.open = true;
+        m.closing = false;
+        m.openness = 0.0f;
+        m.src->PlaySound(Sound::Open);
         m.openTime = ImGui::GetTime();
         m.view = View();
         std::string page = m.src->CurrentPage();
@@ -153,6 +200,28 @@ void PauseMenu::Draw() {
     m.DrawBackdrop();
 
     bool modal = m.picker.open || m.dialog.open;
+    bool animating = m.closing || m.openness < 1.0f;
+    if (animating) {
+        // Opening or closing: the whole panel is drawn into a texture and shown swinging into place.
+        m.turn.active = false;
+        m.inputEnabled = false;
+        float eased = m.OpenEase();
+        if (Fx::Available()) {
+            ImDrawList* dl = DL();
+            Fx::BeginPageCapture(dl, 1);
+            m.DrawPanel(m.view, Pass::Captured);
+            Fx::EndPageCapture(dl);
+            m.DrawPop(eased);
+            Fx::EndPageCompose(dl);
+        } else {
+            PushAlpha(eased);
+            m.DrawPanel(m.view, Pass::Captured);
+            PopAlpha();
+        }
+        ImGui::End();
+        m.EndInput();
+        return;
+    }
     // Before drawing, so a page turn asked for this frame (even mid-turn) starts this frame.
     m.HandleKeys(Section());
     if (m.turn.active && Fx::Available()) {
@@ -412,6 +481,7 @@ void PauseMenu::Impl::StartTurn(int dir, int targetPage) {
     ClearTransient();
     zone = Zone::Sidebar;
     navItemsPrev.clear();
+    Play(dir < 0 ? Sound::PageLeft : Sound::PageRight);
     if (Fx::Available()) {
         turn.active = true;
         turn.start = now;
@@ -461,6 +531,7 @@ void PauseMenu::Impl::MoveContentFocus(int dx, int dy) {
         } else if (dy > 0) {
             zoneBeforeFooter = Zone::Content;
             zone = Zone::Footer;
+            Play(Sound::Cursor);
             return;
         }
     } else if (dx != 0) {
@@ -481,6 +552,7 @@ void PauseMenu::Impl::MoveContentFocus(int dx, int dy) {
             next = best->id;
         } else if (dx < 0) {
             zone = Zone::Sidebar;
+            Play(Sound::Cursor);
             return;
         }
     }
@@ -490,6 +562,7 @@ void PauseMenu::Impl::MoveContentFocus(int dx, int dy) {
         sliderAdjust = false;
         subMode = false;
         focusNeedsReveal = true;
+        Play(Sound::Cursor);
     }
 }
 
@@ -512,6 +585,7 @@ void PauseMenu::Impl::HandleKeys(const Section&) {
         if (padB && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
             zone = Zone::Sidebar;
             ImGui::SetWindowFocus(kMainWindow);
+            Play(Sound::Cancel);
         }
         if (!sectionHasEmbedded) {
             zone = Zone::Sidebar;
@@ -523,8 +597,10 @@ void PauseMenu::Impl::HandleKeys(const Section&) {
         padB = false;
         if (sliderAdjust) {
             sliderAdjust = false;
+            Play(Sound::Cancel);
         } else if (subMode) {
             subMode = false;
+            Play(Sound::Cancel);
         } else {
             src->Close();
         }
@@ -543,8 +619,10 @@ void PauseMenu::Impl::HandleKeys(const Section&) {
                 view.descExpanded = false;
             }
             focusNeedsReveal = true;
+            Play(Sound::Cursor);
         } else if (sectionHasEmbedded) {
             zone = Zone::Embedded;
+            Play(Sound::Cursor);
         }
     };
     switch (zone) {
@@ -558,6 +636,7 @@ void PauseMenu::Impl::HandleKeys(const Section&) {
             if (padUp && index > 0) {
                 SelectSection(sections[index - 1]);
                 sidebarNeedsReveal = true;
+                Play(Sound::Cursor);
             } else if (padDown) {
                 if (index + 1 < (int)sections.size()) {
                     SelectSection(sections[index + 1]);
@@ -566,6 +645,7 @@ void PauseMenu::Impl::HandleKeys(const Section&) {
                     zoneBeforeFooter = Zone::Sidebar;
                     zone = Zone::Footer;
                 }
+                Play(Sound::Cursor);
             } else if (padRight || padA) {
                 padA = false;
                 enterContent();
@@ -580,10 +660,12 @@ void PauseMenu::Impl::HandleKeys(const Section&) {
                 break; // left / right belong to the slider
             }
             if (subMode) {
-                if (padLeft) {
-                    subIndex = std::max(0, subIndex - 1);
-                } else if (padRight) {
-                    subIndex = std::min(std::max(0, subCountPrev - 1), subIndex + 1);
+                if (padLeft || padRight) {
+                    int before = subIndex;
+                    subIndex = std::clamp(subIndex + (padLeft ? -1 : 1), 0, std::max(0, subCountPrev - 1));
+                    if (subIndex != before) {
+                        Play(Sound::Cursor);
+                    }
                 } else if (padUp || padDown) {
                     subMode = false;
                     MoveContentFocus(0, padUp ? -1 : 1);
@@ -601,12 +683,15 @@ void PauseMenu::Impl::HandleKeys(const Section&) {
             }
             break;
         case Zone::Footer:
-            if (padLeft) {
-                footerIndex = std::max(0, footerIndex - 1);
-            } else if (padRight) {
-                footerIndex = std::min(2, footerIndex + 1);
+            if (padLeft || padRight) {
+                int before = footerIndex;
+                footerIndex = std::clamp(footerIndex + (padLeft ? -1 : 1), 0, 2);
+                if (footerIndex != before) {
+                    Play(Sound::Cursor);
+                }
             } else if (padUp) {
                 zone = zoneBeforeFooter;
+                Play(Sound::Cursor);
             }
             break;
         default:
@@ -621,16 +706,16 @@ void PauseMenu::Impl::DrawBackdrop() {
     Rect screen = ScreenRect();
     if (Fx::Available()) {
         ImDrawList* dl = DL();
-        // 10 design px of blur, scaled 105% so the soft edge is off screen, fading in over 180ms.
+        // 10 design px of blur, scaled 105% so the soft edge is off screen. Blur, zoom and dim all follow
+        // the open / close animation.
         Fx::QueueBackdrop(dl, 10.0f * Scale());
-        float t = std::clamp((float)((now - openTime) / 0.18), 0.0f, 1.0f);
-        float fade = 1.0f - (1.0f - t) * (1.0f - t);
-        const float inset = (1.0f - 1.0f / 1.05f) * 0.5f;
+        float fade = OpenEase();
+        const float inset = (1.0f - 1.0f / (1.0f + 0.05f * fade)) * 0.5f;
         ImVec2 a = PxF(screen.x, screen.y), b = PxF(screen.r(), screen.b());
         dl->AddImage(Fx::BackdropTexture(), a, b, { inset, 1.0f - inset }, { 1.0f - inset, inset },
                      IM_COL32(255, 255, 255, (int)(fade * 255.0f)));
     }
-    Fill(screen, C(Tok::OverlayDim, 0.45f));
+    Fill(screen, C(Tok::OverlayDim, 0.45f * OpenEase()));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -874,6 +959,9 @@ void PauseMenu::Impl::DrawSidebar(View& v, const Rect& body) {
         }
         bool hovered = false, held = false;
         if (live && TapId(RowId("pm/sec/" + pageName + "/" + name), item, &hovered, &held)) {
+            if (name != v.section || !v.search.empty()) {
+                Play(Sound::Cursor);
+            }
             SelectSection(name);
             zone = Zone::Sidebar;
         }
@@ -1095,6 +1183,7 @@ void PauseMenu::Impl::DrawFooter(View& v, const Rect& r, const Section& section,
                 dialog.title = "Reset";
                 dialog.message = "Reset the game? Progress since your last save will be lost.";
                 dialog.onYes = [this]() { src->Reset(); };
+                Play(Sound::Decide);
             } else if (i == 1) {
                 dialog = Dialog();
                 dialog.open = true;
@@ -1102,6 +1191,7 @@ void PauseMenu::Impl::DrawFooter(View& v, const Rect& r, const Section& section,
                 dialog.title = "Quit SoH";
                 dialog.message = "Are you sure you want to quit SoH?";
                 dialog.onYes = [this]() { src->Quit(); };
+                Play(Sound::Decide);
             } else {
                 src->Close();
             }
@@ -1126,6 +1216,7 @@ void PauseMenu::Impl::DrawFooter(View& v, const Rect& r, const Section& section,
     bool expanded = hasMore && v.descExpanded;
     if (live && hasMore && TapId(RowId("pm/plate"), plate)) {
         v.descExpanded = !v.descExpanded;
+        Play(Sound::Cursor);
     }
     float textW = plate.w - 18.0f - 12.0f;
     TextLayout body = expanded ? Layout(Type::Description, text, textW, 6)
@@ -1192,6 +1283,44 @@ void PauseMenu::Impl::DrawTurn() {
     }
 }
 
+// The open / close animation: the panel swings up from lying back (as the game's own pause screen folds
+// open), growing a little and fading in. `eased` is 0 (gone) to 1 (in place).
+void PauseMenu::Impl::DrawPop(float eased) {
+    const float d = 2400.0f;
+    const float cx = kPanel.cx(), cy = kPanel.cy();
+    const Rect src = { kPanel.x - 1, kPanel.y - 1, kPanel.w + 2, kPanel.h + 2 };
+    float tilt = (1.0f - eased) * 62.0f * IM_PI / 180.0f;
+    float scale = 0.86f + 0.14f * eased;
+    float drop = (1.0f - eased) * 22.0f;
+    float alpha = std::clamp(eased * 1.5f, 0.0f, 1.0f);
+    float c = std::cos(tilt), s = std::sin(tilt);
+    ImVec2 dispPos = ImGui::GetMainViewport()->Pos;
+    ImVec2 dispSize = ImGui::GetIO().DisplaySize;
+    ImDrawList* dl = DL();
+    auto project = [&](float x, float y) {
+        float xr = (x - cx) * scale, yr = (y - cy) * scale;
+        // The top edge leans away from the viewer.
+        float z = yr * s;
+        float k = d / (d - z);
+        return PxF(cx + xr * k, cy + drop + yr * c * k);
+    };
+    auto uv = [&](float x, float y) {
+        ImVec2 p = PxF(x, y);
+        return ImVec2((p.x - dispPos.x) / dispSize.x, 1.0f - (p.y - dispPos.y) / dispSize.y);
+    };
+    // The page texture is premultiplied, so fading it scales every channel.
+    int a = (int)(alpha * 255.0f);
+    ImU32 tint = IM_COL32(a, a, a, a);
+    ImTextureID tex = Fx::PageTexture(1);
+    const int strips = 32;
+    for (int i = 0; i < strips; i++) {
+        float y0 = src.y + src.h * (float)i / strips;
+        float y1 = src.y + src.h * (float)(i + 1) / strips;
+        dl->AddImageQuad(tex, project(src.x, y0), project(src.r(), y0), project(src.r(), y1), project(src.x, y1),
+                         uv(src.x, y0), uv(src.r(), y0), uv(src.r(), y1), uv(src.x, y1), tint);
+    }
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Modals
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1254,13 +1383,13 @@ void PauseMenu::Impl::DrawPicker() {
         padB = false;
         close = true;
     }
-    if (padUp) {
-        picker.highlight = std::max(0, picker.highlight - 1);
+    if (padUp || padDown) {
+        int before = picker.highlight;
+        picker.highlight = std::clamp(picker.highlight + (padUp ? -1 : 1), 0, std::max(0, n - 1));
         picker.reveal = true;
-    }
-    if (padDown) {
-        picker.highlight = std::min(n - 1, picker.highlight + 1);
-        picker.reveal = true;
+        if (picker.highlight != before) {
+            Play(Sound::Cursor);
+        }
     }
 
     ModalPanel(panel);
@@ -1321,9 +1450,10 @@ void PauseMenu::Impl::DrawPicker() {
             picker.set(picker.options[chosen].value);
         }
         countsTime = -1000;
-        close = true;
-    }
-    if (close) {
+        Play(Sound::Decide);
+        picker = Picker();
+    } else if (close) {
+        Play(Sound::Cancel);
         picker = Picker();
     }
 }
@@ -1342,11 +1472,9 @@ void PauseMenu::Impl::DrawDialog() {
         padB = false;
         dismiss = true;
     }
-    if (padLeft) {
-        dialog.highlight = 0;
-    }
-    if (padRight) {
-        dialog.highlight = 1;
+    if ((padLeft && dialog.highlight != 0) || (padRight && dialog.highlight != 1)) {
+        dialog.highlight = padLeft ? 0 : 1;
+        Play(Sound::Cursor);
     }
 
     ModalPanel(panel);
@@ -1393,11 +1521,13 @@ void PauseMenu::Impl::DrawDialog() {
     if (yes) {
         auto action = dialog.onYes;
         dialog = Dialog();
+        Play(Sound::Decide);
         if (action) {
             action();
         }
     } else if (dismiss) {
         dialog = Dialog();
+        Play(Sound::Cancel);
     }
 }
 

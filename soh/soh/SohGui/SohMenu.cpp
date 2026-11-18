@@ -174,17 +174,23 @@ void SohMenu::UpdateElement() {
         ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
         mWasVisible = true;
     } else if (mWasVisible) {
-        // The button that closed the menu is still held: keep it from reaching the game (B swings the sword).
+        // The button that closed the menu is still held: keep it from reaching the game (B swings the sword)
+        // until a moment after the game runs again.
         mWasVisible = false;
         mInputBlockFrames = std::max(6, (int)(ImGui::GetIO().Framerate * 0.25f));
         controlDeck->BlockGameInput(MENU_CLOSE_GAME_INPUT_BLOCK_ID);
-    } else if (mInputBlockFrames > 0 && --mInputBlockFrames == 0) {
+    } else if (mInputBlockFrames > 0 && !PausesGame() && --mInputBlockFrames == 0) {
         controlDeck->UnblockGameInput(MENU_CLOSE_GAME_INPUT_BLOCK_ID);
     }
 }
 
 void SohMenu::Draw() {
-    Ship::Menu::Draw();
+    // Drawn for as long as the menu is open, which includes its closing animation after it stops being
+    // "visible".
+    if (IsVisible() || (mPauseMenu && mPauseMenu->IsOpen())) {
+        DrawElement();
+    }
+    SyncVisibilityConsoleVariable();
 }
 
 void SohMenu::DrawElement() {
@@ -197,6 +203,6 @@ void SohMenu::DrawElement() {
 }
 
 bool SohMenu::PausesGame() {
-    return IsVisible() && mPauseMenu && mPauseMenu->IsOpen();
+    return mPauseMenu && mPauseMenu->IsOpen();
 }
 } // namespace SohGui

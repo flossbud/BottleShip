@@ -36,6 +36,10 @@ struct PauseMenu::Impl : public RowUi {
     Source* src = nullptr;
     View view;
     bool open = false;
+    // Open / close animation: `openness` runs 0 -> 1 while opening and back to 0 while closing.
+    bool closing = false;
+    float openness = 0;
+    double lastCursorSound = 0;
     bool inputCaptured = false;
     bool captureRequested = false;
     double openTime = 0;
@@ -149,6 +153,9 @@ struct PauseMenu::Impl : public RowUi {
     void DrawPicker();
     void DrawDialog();
     void DrawTurn();
+    void DrawPop(float eased);
+    float OpenEase() const;
+    void Play(Sound sound);
     void StartTurn(int dir, int targetPage);
     void SelectSection(const std::string& section);
     void ClearTransient();
@@ -190,6 +197,7 @@ struct PauseMenu::Impl : public RowUi {
     bool Disabled() override;
     void SetPlate(const std::string& title, const std::string& text) override;
     void CaptureInput() override;
+    void PlaySound(Sound sound) override;
     void Confirm(const std::string& title, const std::string& message, std::function<void()> onYes) override;
 };
 

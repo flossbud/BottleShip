@@ -29,6 +29,7 @@ class Source {
     virtual int CountOn(const std::string& page, const std::string& section) = 0;
     // Fills `out` with one group per "Page > Section" that has rows whose label contains `query`.
     virtual int Search(const std::string& query, std::vector<Group>& out, int limit) = 0;
+    virtual void PlaySound(Sound sound) = 0;
     virtual void Close() = 0;
     virtual void Quit() = 0;
     virtual void Reset() = 0;
@@ -42,7 +43,8 @@ class PauseMenu {
     void Update(bool visible);
     // While the menu is open.
     void Draw();
-    // True from the first frame the menu is drawn until it closes.
+    // True from the first frame the menu is drawn until its closing animation has finished. The menu must
+    // be drawn, and the game stays frozen, for as long as this is true.
     bool IsOpen() const;
 
   private:

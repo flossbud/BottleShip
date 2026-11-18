@@ -76,6 +76,10 @@ void PauseMenu::Impl::SetPlate(const std::string& title, const std::string& text
     plateText = text;
 }
 
+void PauseMenu::Impl::PlaySound(Sound sound) {
+    Play(sound);
+}
+
 void PauseMenu::Impl::CaptureInput() {
     captureRequested = true;
 }
@@ -86,6 +90,7 @@ void PauseMenu::Impl::Confirm(const std::string& title, const std::string& messa
     dialog.title = title;
     dialog.message = message;
     dialog.onYes = std::move(onYes);
+    Play(Sound::Decide);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -275,6 +280,7 @@ void PauseMenu::Impl::DrawGroup(Group& group, const Rect& r, int column, float c
                 if (tapped) {
                     (i == 0 ? group.bulkNone : group.bulkAll)();
                     countsTime = -1000;
+                    Play(Sound::Decide);
                 }
                 right -= bw + 4.0f;
             }
@@ -388,6 +394,7 @@ void PauseMenu::Impl::DrawRow(Row& row, const Rect& r) {
                 padA = false;
                 subMode = true;
                 subIndex = 0;
+                Play(Sound::Decide);
             }
         }
         bool inner = (subMode && row.kind == RowKind::Drawn) || (sliderAdjust && row.kind == RowKind::Slider);
@@ -405,10 +412,14 @@ void PauseMenu::Impl::DrawRow(Row& row, const Rect& r) {
 
 void PauseMenu::Impl::DrawToggle(Row& row, const Rect& r) {
     bool live = pass == Pass::Live;
-    bool tapped = live && TapId(row.id, r) && !row.disabled;
-    bool byPad = live && curRowFocused && usingPad && zone == Zone::Content && padA && !row.disabled;
+    bool tapped = live && TapId(row.id, r);
+    bool byPad = live && curRowFocused && usingPad && zone == Zone::Content && padA;
     if (byPad) {
         padA = false;
+    }
+    if (row.disabled && (tapped || byPad)) {
+        Play(Sound::Error);
+        tapped = byPad = false;
     }
     const char* text = row.on ? "ON" : "OFF";
     float tw = TextW(Type::OnOff, text);
@@ -426,6 +437,7 @@ void PauseMenu::Impl::DrawToggle(Row& row, const Rect& r) {
     if ((tapped || byPad) && row.activate) {
         row.activate();
         countsTime = -1000;
+        Play(Sound::Decide);
     }
 }
 
@@ -478,6 +490,7 @@ void PauseMenu::Impl::DrawSlider(Row& row, const Rect& r) {
         if (padA) {
             padA = false;
             sliderAdjust = !sliderAdjust;
+            Play(Sound::Decide);
         }
         if (sliderAdjust) {
             if (padLeft) {
@@ -520,6 +533,7 @@ void PauseMenu::Impl::DrawSlider(Row& row, const Rect& r) {
     }
     if (changed && row.setValue) {
         row.setValue(value);
+        Play(Sound::Cursor);
     }
 }
 
@@ -601,6 +615,7 @@ void PauseMenu::Impl::DrawChoice(Row& row, const Rect& r) {
             picker.set = row.setOption;
             picker.colors = pc;
             picker.reveal = true;
+            Play(Sound::Decide);
             for (size_t i = 0; i < row.options.size(); i++) {
                 if (row.options[i].value == row.current) {
                     picker.highlight = (int)i;
@@ -613,6 +628,7 @@ void PauseMenu::Impl::DrawChoice(Row& row, const Rect& r) {
     }
     if (picked && row.setOption) {
         row.setOption(pick);
+        Play(Sound::Decide);
     }
 }
 
@@ -652,6 +668,7 @@ void PauseMenu::Impl::DrawButton(Row& row, const Rect& r) {
     if ((tapped || byPad) && row.activate) {
         row.activate();
         countsTime = -1000;
+        Play(Sound::Decide);
     }
 }
 

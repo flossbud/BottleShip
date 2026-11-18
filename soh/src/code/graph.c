@@ -495,6 +495,10 @@ static void RunFrame() {
             if (!(sHasFrameToHold && SohGui_IsGamePausedByMenu())) {
                 Graph_Update(&runFrameContext.gfxCtx, gGameState);
                 sHasFrameToHold = true;
+            } else {
+                // Graph_Update is also what runs the game side of the audio every frame. Keep that going so
+                // the menu's sounds are played and the music carries on as it does on the pause screen.
+                func_800F3054();
             }
             // ticksB = GetPerfCounter();
 

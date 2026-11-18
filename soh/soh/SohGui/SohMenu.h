@@ -209,7 +209,7 @@ class SohMenu : public Ship::Menu, public Pm::Source {
     void AddMenuNetwork();
     static void UpdateLanguageMap(std::unordered_map<int32_t, const char*>& languageMap);
 
-    // True while the menu is open: the game is frozen behind it.
+    // True while the menu is open, closing animation included: the game is frozen behind it.
     bool PausesGame();
     Pm::PauseMenu* GetPauseMenu() {
         return mPauseMenu.get();
@@ -225,6 +225,7 @@ class SohMenu : public Ship::Menu, public Pm::Source {
     Pm::Section Build(const std::string& page, const std::string& section) override;
     int CountOn(const std::string& page, const std::string& section) override;
     int Search(const std::string& query, std::vector<Pm::Group>& out, int limit) override;
+    void PlaySound(Pm::Sound sound) override;
     void Close() override;
     void Quit() override;
     void Reset() override;
@@ -239,6 +240,8 @@ class SohMenu : public Ship::Menu, public Pm::Source {
     std::unique_ptr<Pm::PauseMenu> mPauseMenu;
     bool mPendingWarning = false;
     bool mWasVisible = false;
+    // The menu put the game's audio into its pause state (softer music) and has to take it out again.
+    bool mAudioPaused = false;
     int mInputBlockFrames = 0;
     char mGitCommitHashTruncated[8];
     bool mIsTaggedVersion;

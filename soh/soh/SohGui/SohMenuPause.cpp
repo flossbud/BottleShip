@@ -18,6 +18,11 @@
 // in SohMenuSettings.cpp and friends. This file turns them into the rows the new menu draws, so both
 // stay in step and nothing about a setting is written down twice.
 
+extern "C" {
+// Non-zero while the game's audio is in its pause state (code_800EC960.c).
+extern s8 D_80130608;
+}
+
 namespace SohGui {
 extern std::shared_ptr<SohMenu> mSohMenu;
 
@@ -182,6 +187,50 @@ std::string SohMenu::CurrentSection(const std::string& page) {
 void SohMenu::SetCurrentSection(const std::string& page, const std::string& section) {
     CVarSetString(menuEntries.at(page).sidebarCvar, section.c_str());
     SaveCvars();
+}
+
+void SohMenu::PlaySound(Pm::Sound sound) {
+    // The game's own pause screen: func_800F64E0 plays the open / close sound and puts the audio into or
+    // out of its pause state, which softens the music. Leave that state alone if the game is already in it.
+    if (sound == Pm::Sound::Open && D_80130608 == 0) {
+        func_800F64E0(1);
+        mAudioPaused = true;
+        return;
+    }
+    if (sound == Pm::Sound::Close && mAudioPaused) {
+        func_800F64E0(0);
+        mAudioPaused = false;
+        return;
+    }
+    u16 sfx = NA_SE_SY_CURSOR;
+    switch (sound) {
+        case Pm::Sound::Open:
+            sfx = NA_SE_SY_WIN_OPEN;
+            break;
+        case Pm::Sound::Close:
+            sfx = NA_SE_SY_WIN_CLOSE;
+            break;
+        case Pm::Sound::Cursor:
+            sfx = NA_SE_SY_CURSOR;
+            break;
+        case Pm::Sound::Decide:
+            sfx = NA_SE_SY_DECIDE;
+            break;
+        case Pm::Sound::Cancel:
+            sfx = NA_SE_SY_CANCEL;
+            break;
+        case Pm::Sound::Error:
+            sfx = NA_SE_SY_ERROR;
+            break;
+        case Pm::Sound::PageLeft:
+            sfx = NA_SE_SY_WIN_SCROLL_LEFT;
+            break;
+        case Pm::Sound::PageRight:
+            sfx = NA_SE_SY_WIN_SCROLL_RIGHT;
+            break;
+    }
+    Audio_PlaySoundGeneral(sfx, &gSfxDefaultPos, 4, &gSfxDefaultFreqAndVolScale, &gSfxDefaultFreqAndVolScale,
+                           &gSfxDefaultReverb);
 }
 
 void SohMenu::Close() {

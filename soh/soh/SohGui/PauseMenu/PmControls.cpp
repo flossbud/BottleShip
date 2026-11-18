@@ -262,6 +262,7 @@ void PollListening(RowUi& ui, const Row& row, const BindRow& bind) {
     }
     if (done) {
         StopListening();
+        ui.PlaySound(Sound::Decide);
     }
 }
 
@@ -277,8 +278,10 @@ void DrawBindRow(RowUi& ui, const Row& row, const BindRow& bind, const Rect& r) 
     auto listen = [&](const std::string& mappingId) {
         if (IsListening(row.id, mappingId)) {
             StopListening();
+            ui.PlaySound(Sound::Cancel);
             return;
         }
+        ui.PlaySound(Sound::Decide);
         sListen = Listening();
         sListen.target = bind.target;
         sListen.port = bind.port;
@@ -315,6 +318,7 @@ void DrawBindRow(RowUi& ui, const Row& row, const BindRow& bind, const Rect& r) 
         }
         if (tapRemove) {
             StopListening();
+            ui.PlaySound(Sound::Cancel);
             if (bind.remove) {
                 bind.remove(chip.id);
             }
