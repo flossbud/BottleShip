@@ -575,15 +575,20 @@ void OTRAudio_Thread() {
         int samples_left = AudioPlayer_Buffered();
         u32 num_audio_samples = samples_left < AudioPlayer_GetDesiredBuffered() ? SAMPLES_HIGH : SAMPLES_LOW;
 
-        // 3 is the maximum authentic frame divisor.
-        s16 audio_buffer[SAMPLES_HIGH * NUM_AUDIO_CHANNELS * 3];
-        for (int i = 0; i < AUDIO_FRAMES_PER_UPDATE; i++) {
-            AudioMgr_CreateNextAudioBuffer(audio_buffer + i * (num_audio_samples * NUM_AUDIO_CHANNELS),
-                                           num_audio_samples);
-        }
+        // One game tick normally makes AUDIO_FRAMES_PER_UPDATE audio frames, which only covers a tick of
+        // up to ~51 ms. When the game runs slower than that the queue drains and SDL plays the gaps as
+        // silence (crackle). Like the N64, where the audio thread keeps real time while the game lags,
+        // make one or two extra audio frames when the queue was low at the start of this tick.
+        // 1536 = 1.5 SDL device buffers; below the range the queue occupies when the game keeps up.
+#define AUDIO_CATCHUP_LOW 1536
+        int extra_frames = (samples_left < AUDIO_CATCHUP_LOW) + (samples_left < AUDIO_CATCHUP_LOW / 2);
 
-        AudioPlayer_Play((u8*)audio_buffer,
-                         num_audio_samples * (sizeof(int16_t) * NUM_AUDIO_CHANNELS * AUDIO_FRAMES_PER_UPDATE));
+        // Each audio frame is queued as soon as it is made, so one frame of buffer is enough.
+        s16 audio_buffer[SAMPLES_HIGH * NUM_AUDIO_CHANNELS];
+        for (int i = 0; i < AUDIO_FRAMES_PER_UPDATE + extra_frames; i++) {
+            AudioMgr_CreateNextAudioBuffer(audio_buffer, num_audio_samples);
+            AudioPlayer_Play((u8*)audio_buffer, num_audio_samples * (sizeof(int16_t) * NUM_AUDIO_CHANNELS));
+        }
 
         audio.processing = false;
         audio.cv_from_thread.notify_one();
